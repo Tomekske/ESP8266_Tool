@@ -17,7 +17,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-
 loadSettings();
 
     // make sure only comport of the atmega168 is getting obaint
@@ -34,6 +33,17 @@ loadSettings();
                 }
             }
         }
+    }
+    if(comPort.isEmpty())
+    {
+        ui->lblComPort->setVisible(false);
+        ui->txtConsole->append("Could not connect to ESP8266");
+    }
+    else
+    {
+        ui->lblComPort->setText("Connected to " + comPort);
+        ui->txtConsole->append("Connected to " + comPort);
+
     }
 
     showFilesFromESP();

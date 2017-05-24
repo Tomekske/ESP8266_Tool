@@ -43,7 +43,7 @@ private slots:
 private:
     Ui::MainWindow *ui;
 
-    QString comPort;
+    QString comPort = "";
     QSerialPort *serial;
     quint16  vendorID = 4292;
     quint16  productID = 60000;
