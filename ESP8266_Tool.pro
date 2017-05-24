@@ -18,3 +18,10 @@ SOURCES += main.cpp\
 HEADERS  += mainwindow.h
 
 FORMS    += mainwindow.ui
+
+RESOURCES += \
+    icons.qrc
+
+win32 {
+    RC_FILE = ESP8266_Tool.rc
+}

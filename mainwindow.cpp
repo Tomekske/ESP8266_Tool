@@ -3,13 +3,14 @@
 #include <QUrl>
 #include <QFileDialog>
 #include <QProcess>
-#include <QtSerialPort/QSerialPort>
+
 #include <QSignalMapper>
 #include <QTimer>
-#include <QSerialPortInfo>
 
+#include <QDialog>
 #include <QDateTime>
 #include <QDebug>
+#include <QSettings>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -17,27 +18,34 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
-
-
+loadSettings();
 
     // make sure only comport of the atmega168 is getting obaint
     foreach(const QSerialPortInfo &portInfo,QSerialPortInfo::availablePorts())
     {
         if(portInfo.hasVendorIdentifier() && portInfo.hasProductIdentifier())
         {
-            qDebug () << "vendorID: " << portInfo.vendorIdentifier();
-            qDebug () << "productID: " << portInfo.productIdentifier();
             if(portInfo.vendorIdentifier() == vendorID)
             {
                 if(portInfo.productIdentifier() == productID)
                 {
-                    qDebug() << "COM: " << portInfo.portName();
                     comPort = portInfo.portName();
+                    serialFlag = true;
                 }
             }
         }
     }
 
+    showFilesFromESP();
+    showFilesFromESP();
+    ui->txtConsole->append("files from ESP loaded");
+
+
+
+
+
+    showScriptsOnPC();
+    showModulesOnPC();
 
 
 
@@ -56,6 +64,8 @@ void MainWindow::on_btnProgram_clicked()
     QString script = ui->listScripts->currentItem()->text();
     QString prog = "ampy";
     QStringList arguments;
+    int counter = 0;
+
     arguments.append("-p");
     arguments.append(comPort);
     arguments.append("run");
@@ -64,8 +74,32 @@ void MainWindow::on_btnProgram_clicked()
 
 
     QProcess* process = new QProcess(this);
+    if(process->state() == QProcess::NotRunning)
+    {
+        ui->lblProgram->setText("Programming");
+        for(int i = 0; i < 99;i++)
+        {
+            counter ++;
+            ui->progressProgramming->setValue(counter);
+        }
+
+    }
     process->start(prog,arguments);
+    qDebug() << process->state();
+    if(process->state() == QProcess::Running)
+    {
+        counter ++;
+        ui->progressProgramming->setValue(counter);
+        ui->lblProgram->setText("Donne");
+    }
+
     process->waitForFinished();
+
+    counter = 0;
+    ui->progressProgramming->setValue(counter);
+    ui->lblProgram->setText("Waiting");
+    ui->txtConsole->append(script + " " + "programmed");
+
 }
 
 void MainWindow::on_btnContent_clicked()
@@ -89,26 +123,16 @@ void MainWindow::on_btnContent_clicked()
     while(!process->atEnd())
     {
         tmp = process->readLine();
-        qDebug() << tmp;
 
         str = tmp.replace("\r"," ");
         str = tmp.replace("\n"," ");
-        qDebug() << str;
 
         ui->txtbox->append(str);
-
     }
+
+    ui->txtConsole->append("Got content from " + file);
 }
 
-void MainWindow::on_btnFiles_clicked()
-{
-    showFilesFromESP();
-}
-
-void MainWindow::on_btnScripts_clicked()
-{
-showScriptsOnPC();
-}
 
 void MainWindow::showFilesFromESP()
 {
@@ -143,22 +167,35 @@ void MainWindow::showScriptsOnPC()
 {
     ui->listScripts->clear();
     QDir direct;
-    QDir::setCurrent("D:/Tomek/ESP8266/Scripts/");
+    QDir::setCurrent(location_scripts);
     QStringList lst;
     lst = direct.entryList(QDir::NoDotAndDotDot | QDir::System | QDir::Hidden  | QDir::AllDirs | QDir::Files, QDir::DirsFirst);//(QDir::Filter::Files,QDir::SortFlag::NoSort);
     ui->listScripts->addItems(lst);
+    ui->txtConsole->append("Scripts loaded");
+}
+
+void MainWindow::showModulesOnPC()
+{
+    ui->listModule->clear();
+    QDir direct;
+    QDir::setCurrent(location_modules);
+    QStringList lst;
+    lst = direct.entryList(QDir::NoDotAndDotDot | QDir::System | QDir::Hidden  | QDir::AllDirs | QDir::Files, QDir::DirsFirst);//(QDir::Filter::Files,QDir::SortFlag::NoSort);
+    ui->listModule->addItems(lst);
+    ui->txtConsole->append("Modules loaded");
 }
 
 
 void MainWindow::on_btnRemove_clicked()
 {
-
+    QString item = ui->listFilesESP->currentItem()->text();
+    int x = ui->listFilesESP->currentRow();
     QString prog = "ampy";
     QStringList arguments;
     arguments.append("-p");
     arguments.append(comPort);
     arguments.append("rm");
-    arguments.append(ui->listFilesESP->currentItem()->text());
+    arguments.append(item);
 
 
 
@@ -166,15 +203,18 @@ void MainWindow::on_btnRemove_clicked()
     process->start(prog,arguments);
     process->waitForFinished();
 
+    delete ui->listFilesESP->item(x);
+
+    ui->txtConsole->append(item + " " + "deleted from filesystem");
+
 
 }
 
 void MainWindow::on_btnUploadESP_clicked()
 {
-    QDir::setCurrent("D:/Tomek/ESP8266/Scripts/");
+    QDir::setCurrent(location_scripts);
 
     QString script = ui->listScripts->currentItem()->text();
-    qDebug() << script;
 
     QString prog = "ampy";
     QStringList arguments;
@@ -187,14 +227,17 @@ void MainWindow::on_btnUploadESP_clicked()
     process->start(prog,arguments);
     process->waitForFinished();
 
+    showFilesFromESP();
+
+    ui->txtConsole->append(script + " " + "added to filesystem");
+
 }
 
 void MainWindow::on_btnSetMain_clicked()
 {
     QString script = ui->listScripts->currentItem()->text();
-    QDir::setCurrent("D:/Tomek/ESP8266/Scripts/");
+    QDir::setCurrent(location_scripts);
 
-    qDebug() << script;
     QString prog = "ampy";
     QStringList arguments;
     arguments.append("-p");
@@ -206,11 +249,14 @@ void MainWindow::on_btnSetMain_clicked()
     QProcess* process = new QProcess(this);
     process->start(prog,arguments);
     process->waitForFinished();
+
+    ui->txtConsole->append(script + " " + "set as main.py");
+
 }
 
 void MainWindow::on_btnUploadModule_clicked()
 {
-    QDir::setCurrent("D:/Tomek/ESP8266/Modules/");
+    QDir::setCurrent(location_modules);
 
     QString module = ui->listModule->currentItem()->text();
 
@@ -224,14 +270,69 @@ void MainWindow::on_btnUploadModule_clicked()
     QProcess* process = new QProcess(this);
     process->start(prog,arguments);
     process->waitForFinished();
+
+    showFilesFromESP();
+    ui->txtConsole->append(module + " " + "added to filesystem");
+
 }
 
-void MainWindow::on_btnModules_clicked()
+void MainWindow::on_btnReset_clicked()
 {
-    ui->listModule->clear();
-    QDir direct;
-    QDir::setCurrent("D:/Tomek/ESP8266/Modules/");
-    QStringList lst;
-    lst = direct.entryList(QDir::NoDotAndDotDot | QDir::System | QDir::Hidden  | QDir::AllDirs | QDir::Files, QDir::DirsFirst);//(QDir::Filter::Files,QDir::SortFlag::NoSort);
-    ui->listModule->addItems(lst);
+
+    QDir::setCurrent("D:/Tomek/ESP8266/Hardware configs");
+    QString prog = "ampy";
+    QStringList arguments;
+    arguments.append("-p");
+    arguments.append(comPort);
+    arguments.append("run");
+    arguments.append("-n");
+    arguments.append("reset.py");
+
+
+    QProcess* process = new QProcess(this);
+    process->start(prog,arguments);
+    process->waitForFinished();
+
+    ui->txtConsole->append("ESP8266 resseted");
+
 }
+
+void MainWindow::on_actionScript_folder_triggered()
+{
+    QString dir =  QFileDialog::getExistingDirectory(this, tr("Open Directory"),location_scripts,QFileDialog::ShowDirsOnly |  QFileDialog::DontResolveSymlinks);
+    location_scripts = dir;
+    saveSettings();
+    showScriptsOnPC();
+}
+
+
+void MainWindow::saveSettings()
+{
+    QSettings settings("JT","ESP Tool"); //No fucking idea why you need those parameters
+    settings.beginGroup("settings");
+    settings.setValue("Scripts",location_scripts); //set setings
+    settings.setValue("Modules",location_modules); //set setings
+    settings.endGroup();
+}
+
+void MainWindow::loadSettings()
+{
+    QSettings settings("JT","ESP Tool");
+    settings.beginGroup("settings");
+    location_scripts = settings.value("Scripts").toString(); //get settings
+    location_modules = settings.value("Modules").toString(); //get settings
+    settings.endGroup();
+
+
+}
+
+void MainWindow::on_actionLibrary_folder_triggered()
+{
+    QString dir =  QFileDialog::getExistingDirectory(this, tr("Open Directory"),location_modules,QFileDialog::ShowDirsOnly |  QFileDialog::DontResolveSymlinks);
+    location_modules = dir;
+    saveSettings();
+    showModulesOnPC();
+}
+
+
+
